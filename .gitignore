@@ -1,0 +1,12 @@
+CLAUDE*
+claude/
+.claude
+
+*.txt
+*.cov
+*.drcov
+*.jsonl
+
+*.pyc
+*.tmp
+.vscode
