@@ -21,6 +21,7 @@ class TraceImportTask(BackgroundTaskThread):
 
     def run(self):
         """run the import task"""
+
         try:
             # phase 1: parse trace file
             filename = os.path.basename(self.filepath)
@@ -80,6 +81,8 @@ class TraceImportTask(BackgroundTaskThread):
             except:
                 # ignore settings errors, not critical
                 pass
+
+            log_info(self.bv, f"trace import complete: {self.filepath}")
 
             # mark task as finished
             self.finish()

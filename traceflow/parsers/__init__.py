@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, List
 
 from .base import BaseParser
 from .hex_parser import HexParser
+from .w1trace_parser import W1TraceParser
 
 if TYPE_CHECKING:
     from binaryninja import BinaryView
@@ -12,7 +13,8 @@ if TYPE_CHECKING:
 
 # list of available parsers in order of preference
 _PARSERS: List[BaseParser] = [
-    HexParser(),
+    W1TraceParser(),  # try w1trace first since it has specific format detection
+    HexParser(),  # fallback to hex parser for simple address lists
 ]
 
 
