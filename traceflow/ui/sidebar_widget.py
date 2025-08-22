@@ -8,15 +8,19 @@ from binaryninjaui import (
 )
 from PySide6.QtWidgets import QVBoxLayout, QTabWidget
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 from .control_panel import ControlPanel
 from .trace_view import TraceView
 from .stats_view import StatsView
+from .widget_registry import register_widget, unregister_widget
 
 
 class TraceflowSidebarWidget(SidebarWidget):
     """main sidebar widget with tabbed interface"""
+
+    # signal emitted when trace is imported from background task
+    trace_imported = Signal()
 
     def __init__(self, name, frame, data):
         SidebarWidget.__init__(self, name)
@@ -34,6 +38,7 @@ class TraceflowSidebarWidget(SidebarWidget):
         # connect signals to refresh other panels
         self.control_panel.trace_changed.connect(self.on_trace_changed)
         self.trace_view.trace_changed.connect(self.on_trace_changed)
+        self.trace_imported.connect(self.refresh_all_panels)
 
         # add tabs
         self.tabs.addTab(self.control_panel, "Controls")
@@ -46,6 +51,27 @@ class TraceflowSidebarWidget(SidebarWidget):
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
+
+        # register widget for current binary view
+        self._register_for_current_view()
+
+    def __del__(self):
+        """cleanup widget registration"""
+        try:
+            if hasattr(self, "frame") and self.frame:
+                bv = self.frame.getCurrentBinaryView()
+                if bv:
+                    unregister_widget(bv)
+        except:
+            # ignore cleanup errors
+            pass
+
+    def _register_for_current_view(self):
+        """register widget for the current binary view"""
+        if self.frame:
+            bv = self.frame.getCurrentBinaryView()
+            if bv:
+                register_widget(bv, self)
 
     def notifyViewChanged(self, view_frame):
         """handle view changes - update all panels"""
@@ -61,6 +87,9 @@ class TraceflowSidebarWidget(SidebarWidget):
         self.control_panel.update_controls(bv)
         self.trace_view.update_trace_view(bv)
         self.stats_view.update_stats(bv)
+
+        # re-register widget for the new view
+        register_widget(bv, self)
 
     def refresh_all_panels(self):
         """refresh all panels for current view"""

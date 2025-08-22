@@ -58,16 +58,11 @@ class TraceImportTask(BackgroundTaskThread):
             # phase 3: final setup
             self.progress = f"Trace imported: {total_entries:,} entries loaded"
 
-            # log success message with stats if enabled in settings
-            try:
-                if my_settings.get_bool("traceflow.showStatsInLog", False):
-                    msg = f"loaded trace: {total_entries:,} entries with {unique_addresses:,} unique addresses"
-                    if parsed_tracedb.get_thread_count() > 1:
-                        msg += f" ({parsed_tracedb.get_thread_count()} threads)"
-                    log_info(self.bv, msg)
-            except:
-                # ignore settings errors, not critical
-                pass
+            # log success message with statistics
+            msg = f"loaded trace: {total_entries:,} entries with {unique_addresses:,} unique addresses"
+            if parsed_tracedb.get_thread_count() > 1:
+                msg += f" ({parsed_tracedb.get_thread_count()} threads)"
+            log_info(self.bv, msg)
 
             # show completion dialog if enabled
             try:
@@ -84,6 +79,9 @@ class TraceImportTask(BackgroundTaskThread):
 
             log_info(self.bv, f"trace import complete: {self.filepath}")
 
+            # notify ui that trace import is complete
+            self._notify_ui_refresh()
+
             # mark task as finished
             self.finish()
 
@@ -92,6 +90,21 @@ class TraceImportTask(BackgroundTaskThread):
             log_error(self.bv, f"trace import failed: {e}")
             self._show_error_dialog()
             self.cancel()
+
+    def _notify_ui_refresh(self):
+        """notify ui to refresh after import completes"""
+        try:
+            from .ui.widget_registry import get_widget
+
+            widget = get_widget(self.bv)
+            if widget:
+                # emit signal on main thread to refresh ui
+                from PySide6.QtCore import QMetaObject, Qt
+
+                QMetaObject.invokeMethod(widget, "trace_imported", Qt.QueuedConnection)
+        except Exception as e:
+            # ui refresh failure is not critical
+            print(f"warning: failed to refresh ui after import: {e}")
 
     def _show_error_dialog(self):
         """show user-friendly error dialog"""
