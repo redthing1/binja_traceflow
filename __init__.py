@@ -1,3 +1,3 @@
 from binaryninja import *
 
-import traceflow
+from . import traceflow
