@@ -73,8 +73,8 @@ class TraceImportTask(BackgroundTaskThread):
                         MessageBoxButtonSet.OKButtonSet,
                         MessageBoxIcon.InformationIcon,
                     )
-            except:
-                # ignore settings errors, not critical
+            except (AttributeError, TypeError):
+                # ignore settings/dialog errors, not critical for functionality
                 pass
 
             log_info(self.bv, f"trace import complete: {self.filepath}")
@@ -95,16 +95,21 @@ class TraceImportTask(BackgroundTaskThread):
         """notify ui to refresh after import completes"""
         try:
             from .ui.widget_registry import get_widget
+            from .log import log_info
 
             widget = get_widget(self.bv)
             if widget:
                 # emit signal on main thread to refresh ui
                 from PySide6.QtCore import QMetaObject, Qt
 
-                QMetaObject.invokeMethod(widget, "trace_imported", Qt.QueuedConnection)
+                log_info(self.bv, "notifying ui to refresh after trace import")
+                QMetaObject.invokeMethod(widget, "on_trace_imported", Qt.QueuedConnection)
+            else:
+                log_info(self.bv, "warning: no widget found in registry for ui refresh")
         except Exception as e:
-            # ui refresh failure is not critical
-            print(f"warning: failed to refresh ui after import: {e}")
+            # ui refresh failure is not critical - log but don't crash
+            from .log import log_warn
+            log_warn(self.bv, f"failed to refresh ui after import: {e}")
 
     def _show_error_dialog(self):
         """show user-friendly error dialog"""

@@ -13,7 +13,9 @@ from PySide6.QtCore import Qt, Signal
 from binaryninja.interaction import get_open_filename_input
 
 from ..context import get_context
+from .icon_loader import load_icon, create_fallback_icon
 from ..import_task import TraceImportTask
+from ..constants import get_file_dialog_filter
 
 
 class ControlPanel(QWidget):
@@ -28,8 +30,8 @@ class ControlPanel(QWidget):
 
         # create toolbar
         self.toolbar = QToolBar()
-        self.toolbar.setStyleSheet("QToolBar{spacing:2px;}")
-        max_height = 24
+        self.toolbar.setStyleSheet("QToolBar{spacing:2px; border:none;}")
+        max_height = 20
 
         # run to start button
         self.btn_run = QToolButton()
@@ -38,7 +40,7 @@ class ControlPanel(QWidget):
         self.btn_run.setToolTip("Go to start")
         action_run = QAction("Run", self)
         action_run.triggered.connect(self.on_run)
-        action_run.setIcon(self._create_text_icon("⏮"))
+        action_run.setIcon(self._create_icon("rotate-ccw", "|<<"))
         self.btn_run.setDefaultAction(action_run)
         self.toolbar.addWidget(self.btn_run)
 
@@ -49,7 +51,7 @@ class ControlPanel(QWidget):
         self.btn_play.setToolTip("Go to end")
         action_play = QAction("Play", self)
         action_play.triggered.connect(self.on_play)
-        action_play.setIcon(self._create_text_icon("⏭"))
+        action_play.setIcon(self._create_icon("arrow-right-from-line", "|>>"))
         self.btn_play.setDefaultAction(action_play)
         self.toolbar.addWidget(self.btn_play)
 
@@ -60,7 +62,7 @@ class ControlPanel(QWidget):
         self.btn_step_forward.setToolTip("Step forward")
         action_step_forward = QAction("Step Forward", self)
         action_step_forward.triggered.connect(self.on_step_forward)
-        action_step_forward.setIcon(self._create_text_icon("⏩"))
+        action_step_forward.setIcon(self._create_icon("step-forward", ">"))
         self.btn_step_forward.setDefaultAction(action_step_forward)
         self.toolbar.addWidget(self.btn_step_forward)
 
@@ -71,7 +73,7 @@ class ControlPanel(QWidget):
         self.btn_step_backward.setToolTip("Step backward")
         action_step_backward = QAction("Step Backward", self)
         action_step_backward.triggered.connect(self.on_step_backward)
-        action_step_backward.setIcon(self._create_text_icon("⏪"))
+        action_step_backward.setIcon(self._create_icon("step-back", "<"))
         self.btn_step_backward.setDefaultAction(action_step_backward)
         self.toolbar.addWidget(self.btn_step_backward)
 
@@ -85,7 +87,7 @@ class ControlPanel(QWidget):
         self.btn_step_in.setToolTip("Step in (placeholder)")
         action_step_in = QAction("Step In", self)
         action_step_in.triggered.connect(self.on_step_in)
-        action_step_in.setIcon(self._create_text_icon("↓"))
+        action_step_in.setIcon(self._create_icon("arrow-down-to-line", "↓"))
         self.btn_step_in.setDefaultAction(action_step_in)
         self.toolbar.addWidget(self.btn_step_in)
 
@@ -96,7 +98,7 @@ class ControlPanel(QWidget):
         self.btn_step_over.setToolTip("Step over (placeholder)")
         action_step_over = QAction("Step Over", self)
         action_step_over.triggered.connect(self.on_step_over)
-        action_step_over.setIcon(self._create_text_icon("→"))
+        action_step_over.setIcon(self._create_icon("redo-dot", "→"))
         self.btn_step_over.setDefaultAction(action_step_over)
         self.toolbar.addWidget(self.btn_step_over)
 
@@ -107,7 +109,7 @@ class ControlPanel(QWidget):
         self.btn_step_out.setToolTip("Step out (placeholder)")
         action_step_out = QAction("Step Out", self)
         action_step_out.triggered.connect(self.on_step_out)
-        action_step_out.setIcon(self._create_text_icon("↑"))
+        action_step_out.setIcon(self._create_icon("arrow-up-from-dot", "↑"))
         self.btn_step_out.setDefaultAction(action_step_out)
         self.toolbar.addWidget(self.btn_step_out)
 
@@ -118,7 +120,7 @@ class ControlPanel(QWidget):
         self.btn_step_back.setToolTip("Step back (placeholder)")
         action_step_back = QAction("Step Back", self)
         action_step_back.triggered.connect(self.on_step_back)
-        action_step_back.setIcon(self._create_text_icon("←"))
+        action_step_back.setIcon(self._create_icon("undo-dot", "←"))
         self.btn_step_back.setDefaultAction(action_step_back)
         self.toolbar.addWidget(self.btn_step_back)
 
@@ -132,7 +134,7 @@ class ControlPanel(QWidget):
         self.btn_load.setToolTip("Load trace file")
         action_load = QAction("Load Trace", self)
         action_load.triggered.connect(self.on_load_trace)
-        action_load.setIcon(self._create_text_icon("📁"))
+        action_load.setIcon(self._create_icon("folder-open", "📁"))
         self.btn_load.setDefaultAction(action_load)
         self.toolbar.addWidget(self.btn_load)
 
@@ -143,7 +145,7 @@ class ControlPanel(QWidget):
         self.btn_clear.setToolTip("Clear trace")
         action_clear = QAction("Clear Trace", self)
         action_clear.triggered.connect(self.on_clear_trace)
-        action_clear.setIcon(self._create_text_icon("🗑"))
+        action_clear.setIcon(self._create_icon("trash-2", "🗑"))
         self.btn_clear.setDefaultAction(action_clear)
         self.toolbar.addWidget(self.btn_clear)
 
@@ -165,10 +167,22 @@ class ControlPanel(QWidget):
         # disable buttons initially
         self._set_buttons_enabled(False)
 
-    def _create_text_icon(self, text):
-        """create simple text-based icon"""
-        # for now, just return empty icon - real icons would be created with QPainter
-        return QIcon()
+    def update_frame(self, frame):
+        """update frame reference when context changes"""
+        self.frame = frame
+
+    def _get_binary_view(self):
+        """safely get current binary view"""
+        if self.frame is None:
+            return None
+        return self.frame.getCurrentBinaryView()
+
+    def _create_icon(self, icon_name: str, fallback_text: str = "") -> QIcon:
+        """create icon from svg file with fallback"""
+        icon = load_icon(icon_name, size=24)
+        if icon is not None:
+            return icon
+        return create_fallback_icon(fallback_text, size=24)
 
     def _set_buttons_enabled(self, enabled):
         """enable/disable control buttons based on trace state"""
@@ -218,79 +232,165 @@ class ControlPanel(QWidget):
     # button callback methods
     def on_run(self):
         """go to start of trace"""
-        bv = self.frame.getCurrentBinaryView()
+        bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
-            ctx.cursor.go_to_start()
-            ctx.update_highlight()
-            ctx.navigate_to_current()
-            self.update_controls(bv)
-            self.trace_changed.emit()
+            success = ctx.navigator.run()
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
+                from ..log import log_warn
+
+                log_warn(bv, "cannot run: no trace loaded or already at start")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot run: no binary file is currently open")
 
     def on_play(self):
         """go to end of trace"""
-        bv = self.frame.getCurrentBinaryView()
+        bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
-            ctx.cursor.go_to_end()
-            ctx.update_highlight()
-            ctx.navigate_to_current()
-            self.update_controls(bv)
-            self.trace_changed.emit()
+            success = ctx.navigator.play()
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
+                from ..log import log_warn
+
+                log_warn(bv, "cannot play: no trace loaded or already at end")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot play: no binary file is currently open")
 
     def on_step_forward(self):
         """step forward one instruction"""
-        bv = self.frame.getCurrentBinaryView()
+        bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
-            ctx.cursor.step_forward()
-            ctx.update_highlight()
-            ctx.navigate_to_current()
-            self.update_controls(bv)
-            self.trace_changed.emit()
+            success = ctx.navigator.step_forward()
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
+                from ..log import log_warn
+
+                log_warn(bv, "cannot step forward: no trace loaded or at end")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step forward: no binary file is currently open")
 
     def on_step_backward(self):
         """step backward one instruction"""
-        bv = self.frame.getCurrentBinaryView()
+        bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
-            ctx.cursor.step_backward()
-            ctx.update_highlight()
-            ctx.navigate_to_current()
-            self.update_controls(bv)
-            self.trace_changed.emit()
+            success = ctx.navigator.step_backward()
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
+                from ..log import log_warn
+
+                log_warn(bv, "cannot step backward: no trace loaded or at start")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step backward: no binary file is currently open")
 
     def on_step_in(self):
-        """placeholder: step in functionality"""
-        pass
+        """step in functionality (not implemented)"""
+        bv = self._get_binary_view()
+        if bv:
+            ctx = get_context(bv)
+            success = ctx.navigator.step_in()
+            if not success:
+                from ..log import log_warn
+
+                log_warn(bv, "step in not implemented yet")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step in: no binary file is currently open")
 
     def on_step_over(self):
-        """placeholder: step over functionality"""
-        pass
+        """step over functionality (not implemented)"""
+        bv = self._get_binary_view()
+        if bv:
+            ctx = get_context(bv)
+            success = ctx.navigator.step_over()
+            if not success:
+                from ..log import log_warn
+
+                log_warn(bv, "step over not implemented yet")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step over: no binary file is currently open")
 
     def on_step_out(self):
-        """placeholder: step out functionality"""
-        pass
+        """step out functionality (not implemented)"""
+        bv = self._get_binary_view()
+        if bv:
+            ctx = get_context(bv)
+            success = ctx.navigator.step_out()
+            if not success:
+                from ..log import log_warn
+
+                log_warn(bv, "step out not implemented yet")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step out: no binary file is currently open")
 
     def on_step_back(self):
-        """placeholder: step back functionality"""
-        pass
+        """step back functionality (not implemented)"""
+        bv = self._get_binary_view()
+        if bv:
+            ctx = get_context(bv)
+            success = ctx.navigator.step_back()
+            if not success:
+                from ..log import log_warn
+
+                log_warn(bv, "step back not implemented yet")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step back: no binary file is currently open")
 
     def on_load_trace(self):
         """load trace file via file dialog"""
-        filename = get_open_filename_input("Load Trace File", "*.trace *.txt *.log")
+        filename = get_open_filename_input("Load Trace File", get_file_dialog_filter())
         if filename:
-            bv = self.frame.getCurrentBinaryView()
+            bv = self._get_binary_view()
             if bv:
                 # start import task
                 task = TraceImportTask(bv, filename)
                 task.start()
+            else:
+                from binaryninja.interaction import show_message_box
+                from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
+
+                show_message_box(
+                    "No Binary View",
+                    "Cannot load trace: no binary file is currently open.",
+                    MessageBoxButtonSet.OKButtonSet,
+                    MessageBoxIcon.ErrorIcon,
+                )
 
     def on_clear_trace(self):
         """clear current trace"""
-        bv = self.frame.getCurrentBinaryView()
+        bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
             ctx.clear()
             self.update_controls(bv)
             self.trace_changed.emit()
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot clear trace: no binary file is currently open")

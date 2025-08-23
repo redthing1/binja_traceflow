@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem
 from PySide6.QtCore import Qt, Signal
 
 from ..context import get_context
+from ..constants import TRACE_VIEW_WINDOW_SIZE
 
 
 class TraceView(QWidget):
@@ -29,6 +30,10 @@ class TraceView(QWidget):
         # track current binary view for updates
         self.current_bv = None
 
+    def update_frame(self, frame):
+        """update frame reference when context changes"""
+        self.frame = frame
+
     def update_trace_view(self, bv):
         """refresh trace view for given binary view"""
         self.current_bv = bv
@@ -53,9 +58,8 @@ class TraceView(QWidget):
             current_pos = 0
 
         # calculate range to show
-        window_size = 10
-        start_pos = max(0, current_pos - window_size)
-        end_pos = min(total_entries, current_pos + window_size + 1)
+        start_pos = max(0, current_pos - TRACE_VIEW_WINDOW_SIZE)
+        end_pos = min(total_entries, current_pos + TRACE_VIEW_WINDOW_SIZE + 1)
 
         # populate list with entries in range
         for i in range(start_pos, end_pos):

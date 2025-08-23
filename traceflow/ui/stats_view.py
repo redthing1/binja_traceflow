@@ -37,6 +37,10 @@ class StatsView(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         self.setLayout(layout)
 
+    def update_frame(self, frame):
+        """update frame reference when context changes"""
+        self.frame = frame
+
     def update_stats(self, bv):
         """refresh statistics for given binary view"""
         if bv is None:

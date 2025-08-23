@@ -14,6 +14,11 @@ if TYPE_CHECKING:
 class HexParser(BaseParser):
     """parser for trace files containing hex addresses on newlines"""
 
+    @classmethod
+    def get_file_extensions(cls) -> list[str]:
+        """get list of file extensions this parser supports"""
+        return ["trace", "txt", "log"]
+
     def can_parse(self, filepath: str) -> bool:
         try:
             with open(filepath, "r", encoding="utf-8") as f:

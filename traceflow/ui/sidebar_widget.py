@@ -5,10 +5,11 @@ from binaryninjaui import (
     SidebarWidgetType,
     SidebarWidgetLocation,
     SidebarContextSensitivity,
+    UIContext,
 )
 from PySide6.QtWidgets import QVBoxLayout, QTabWidget
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 
 from .control_panel import ControlPanel
 from .trace_view import TraceView
@@ -55,6 +56,20 @@ class TraceflowSidebarWidget(SidebarWidget):
         # register widget for current binary view
         self._register_for_current_view()
 
+        # immediate refresh of all panels for current view
+        self.refresh_all_panels()
+
+    def _get_current_frame(self):
+        """get current frame from UI context"""
+        try:
+            context = UIContext.activeContext()
+            if context:
+                return context.getCurrentViewFrame()
+        except (AttributeError, RuntimeError):
+            # UIContext may not be available in some contexts
+            pass
+        return None
+
     def __del__(self):
         """cleanup widget registration"""
         try:
@@ -62,8 +77,8 @@ class TraceflowSidebarWidget(SidebarWidget):
                 bv = self.frame.getCurrentBinaryView()
                 if bv:
                     unregister_widget(bv)
-        except:
-            # ignore cleanup errors
+        except (AttributeError, RuntimeError):
+            # ignore cleanup errors during widget shutdown
             pass
 
     def _register_for_current_view(self):
@@ -77,6 +92,11 @@ class TraceflowSidebarWidget(SidebarWidget):
         """handle view changes - update all panels"""
         if view_frame is None:
             return
+
+        # update frame references in all child panels
+        self.control_panel.update_frame(view_frame)
+        self.trace_view.update_frame(view_frame)
+        self.stats_view.update_frame(view_frame)
 
         # get the binary view from the new frame
         bv = view_frame.getCurrentBinaryView()
@@ -93,10 +113,17 @@ class TraceflowSidebarWidget(SidebarWidget):
 
     def refresh_all_panels(self):
         """refresh all panels for current view"""
-        if self.frame is None:
+        # get current frame dynamically instead of using stored frame
+        current_frame = self._get_current_frame()
+        if current_frame is None:
             return
 
-        bv = self.frame.getCurrentBinaryView()
+        # update child panels' frame references
+        self.control_panel.update_frame(current_frame)
+        self.trace_view.update_frame(current_frame)
+        self.stats_view.update_frame(current_frame)
+
+        bv = current_frame.getCurrentBinaryView()
         if bv is None:
             return
 
@@ -124,6 +151,11 @@ class TraceflowSidebarWidget(SidebarWidget):
 
         # always refresh stats
         self.stats_view.update_stats(bv)
+
+    @Slot()
+    def on_trace_imported(self):
+        """slot method to handle trace import completion"""
+        self.trace_imported.emit()
 
 
 class TraceflowSidebarWidgetType(SidebarWidgetType):

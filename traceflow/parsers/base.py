@@ -11,6 +11,11 @@ if TYPE_CHECKING:
 class BaseParser(ABC):
     """abstract base class for trace file parsers"""
 
+    @classmethod
+    def get_file_extensions(cls) -> list[str]:
+        """get list of file extensions this parser supports"""
+        return []
+
     @abstractmethod
     def can_parse(self, filepath: str) -> bool:
         pass

@@ -13,6 +13,11 @@ from ..tracedb import TraceDB, TraceEntry
 class W1TraceParser(BaseParser):
     """parser for w1trace jsonl format"""
 
+    @classmethod
+    def get_file_extensions(cls) -> list[str]:
+        """get list of file extensions this parser supports"""
+        return ["jsonl"]
+
     @staticmethod
     def can_parse(filepath: str) -> bool:
         """check if file can be parsed by this parser"""
@@ -65,12 +70,14 @@ class W1TraceParser(BaseParser):
                         )
 
                 except json.JSONDecodeError as e:
-                    # skip malformed json lines with warning
-                    print(f"warning: skipping malformed json at line {line_num}: {e}")
+                    from ..log import log_warn
+
+                    log_warn(bv, f"skipping malformed json at line {line_num}: {e}")
                     continue
                 except Exception as e:
-                    # skip other errors with warning
-                    print(f"warning: error processing line {line_num}: {e}")
+                    from ..log import log_warn
+
+                    log_warn(bv, f"error processing line {line_num}: {e}")
                     continue
 
         return trace_db
