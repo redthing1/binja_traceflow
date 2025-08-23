@@ -44,16 +44,27 @@ class ControlPanel(QWidget):
         self.btn_run.setDefaultAction(action_run)
         self.toolbar.addWidget(self.btn_run)
 
-        # play to end button
-        self.btn_play = QToolButton()
-        self.btn_play.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_play.setMaximumHeight(max_height)
-        self.btn_play.setToolTip("Go to end")
-        action_play = QAction("Play", self)
-        action_play.triggered.connect(self.on_play)
-        action_play.setIcon(self._create_icon("arrow-right-from-line", "|>>"))
-        self.btn_play.setDefaultAction(action_play)
-        self.toolbar.addWidget(self.btn_play)
+        # play forward button
+        self.btn_play_forward = QToolButton()
+        self.btn_play_forward.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_play_forward.setMaximumHeight(max_height)
+        self.btn_play_forward.setToolTip("Play forward to end")
+        action_play_forward = QAction("Play Forward", self)
+        action_play_forward.triggered.connect(self.on_play_forward)
+        action_play_forward.setIcon(self._create_icon("arrow-right-from-line", "|>>"))
+        self.btn_play_forward.setDefaultAction(action_play_forward)
+        self.toolbar.addWidget(self.btn_play_forward)
+
+        # play backward button
+        self.btn_play_backward = QToolButton()
+        self.btn_play_backward.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_play_backward.setMaximumHeight(max_height)
+        self.btn_play_backward.setToolTip("Play backward to start")
+        action_play_backward = QAction("Play Backward", self)
+        action_play_backward.triggered.connect(self.on_play_backward)
+        action_play_backward.setIcon(self._create_icon("arrow-left-from-line", "<<|"))
+        self.btn_play_backward.setDefaultAction(action_play_backward)
+        self.toolbar.addWidget(self.btn_play_backward)
 
         # step forward button
         self.btn_step_forward = QToolButton()
@@ -76,9 +87,6 @@ class ControlPanel(QWidget):
         action_step_backward.setIcon(self._create_icon("step-back", "<"))
         self.btn_step_backward.setDefaultAction(action_step_backward)
         self.toolbar.addWidget(self.btn_step_backward)
-
-        # separator
-        self.toolbar.addSeparator()
 
         # step in button (placeholder)
         self.btn_step_in = QToolButton()
@@ -113,16 +121,6 @@ class ControlPanel(QWidget):
         self.btn_step_out.setDefaultAction(action_step_out)
         self.toolbar.addWidget(self.btn_step_out)
 
-        # step back button (placeholder)
-        self.btn_step_back = QToolButton()
-        self.btn_step_back.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_step_back.setMaximumHeight(max_height)
-        self.btn_step_back.setToolTip("Step back (placeholder)")
-        action_step_back = QAction("Step Back", self)
-        action_step_back.triggered.connect(self.on_step_back)
-        action_step_back.setIcon(self._create_icon("undo-dot", "←"))
-        self.btn_step_back.setDefaultAction(action_step_back)
-        self.toolbar.addWidget(self.btn_step_back)
 
         # separator
         self.toolbar.addSeparator()
@@ -187,13 +185,13 @@ class ControlPanel(QWidget):
     def _set_buttons_enabled(self, enabled):
         """enable/disable control buttons based on trace state"""
         self.btn_run.setEnabled(enabled)
-        self.btn_play.setEnabled(enabled)
+        self.btn_play_forward.setEnabled(enabled)
+        self.btn_play_backward.setEnabled(enabled)
         self.btn_step_forward.setEnabled(enabled)
         self.btn_step_backward.setEnabled(enabled)
-        self.btn_step_in.setEnabled(False)  # placeholder buttons always disabled
-        self.btn_step_over.setEnabled(False)
-        self.btn_step_out.setEnabled(False)
-        self.btn_step_back.setEnabled(False)
+        self.btn_step_in.setEnabled(enabled)  # keep placeholders enabled
+        self.btn_step_over.setEnabled(enabled)
+        self.btn_step_out.setEnabled(enabled)
         self.btn_clear.setEnabled(enabled)
 
     def update_controls(self, bv):
@@ -248,23 +246,41 @@ class ControlPanel(QWidget):
 
             log_warn(None, "cannot run: no binary file is currently open")
 
-    def on_play(self):
-        """go to end of trace"""
+    def on_play_forward(self):
+        """play forward to end"""
         bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
-            success = ctx.navigator.play()
+            success = ctx.navigator.play_forward()
             if success:
                 self.update_controls(bv)
                 self.trace_changed.emit()
             else:
                 from ..log import log_warn
 
-                log_warn(bv, "cannot play: no trace loaded or already at end")
+                log_warn(bv, "cannot play forward: no trace loaded")
         else:
             from ..log import log_warn
 
-            log_warn(None, "cannot play: no binary file is currently open")
+            log_warn(None, "cannot play forward: no binary file is currently open")
+
+    def on_play_backward(self):
+        """play backward to start"""
+        bv = self._get_binary_view()
+        if bv:
+            ctx = get_context(bv)
+            success = ctx.navigator.play_backward()
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
+                from ..log import log_warn
+
+                log_warn(bv, "cannot play backward: no trace loaded")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot play backward: no binary file is currently open")
 
     def on_step_forward(self):
         """step forward one instruction"""
@@ -347,20 +363,6 @@ class ControlPanel(QWidget):
 
             log_warn(None, "cannot step out: no binary file is currently open")
 
-    def on_step_back(self):
-        """step back functionality (not implemented)"""
-        bv = self._get_binary_view()
-        if bv:
-            ctx = get_context(bv)
-            success = ctx.navigator.step_back()
-            if not success:
-                from ..log import log_warn
-
-                log_warn(bv, "step back not implemented yet")
-        else:
-            from ..log import log_warn
-
-            log_warn(None, "cannot step back: no binary file is currently open")
 
     def on_load_trace(self):
         """load trace file via file dialog"""
