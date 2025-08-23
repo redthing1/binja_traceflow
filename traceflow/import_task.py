@@ -3,7 +3,7 @@ from binaryninja import BackgroundTaskThread
 from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
 
-from .context import get_context
+from .context import get_context, ExecutionState
 from .parsers import detect_and_parse
 from .settings import my_settings
 from .log import log_info, log_error
@@ -60,7 +60,7 @@ class TraceImportTask(BackgroundTaskThread):
 
             # go to first instruction and set up initial state
             ctx.cursor.go_to_start()
-            ctx.execution_state = "stopped"
+            ctx.set_execution_state(ExecutionState.STOPPED)
 
             # debug logging
             current_addr = ctx.cursor.get_current_address()

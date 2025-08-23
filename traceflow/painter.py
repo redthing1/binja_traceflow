@@ -1,8 +1,8 @@
 # trace painting and highlighting with frontier effect
 
-from typing import Dict, Tuple, List, Optional
-from binaryninja import BinaryView, Function
-from binaryninja.highlight import HighlightColor
+from typing import Set, List, Optional, Tuple
+from binaryninja import BinaryView
+from binaryninja.highlight import HighlightColor, HighlightStandardColor
 from .trace_cursor import TraceCursor
 from .tracedb import TraceEntry
 
@@ -12,7 +12,7 @@ class TracePainter:
 
     def __init__(self, frontier_size: int = 8):
         self.frontier_size = frontier_size
-        self.highlighted: Dict[Tuple[Function, int], HighlightColor] = {}
+        self.highlighted_addresses: Set[int] = set()
 
     def paint_frontier(self, bv: BinaryView, cursor: TraceCursor):
         """paint the frontier effect around current position"""
@@ -66,30 +66,51 @@ class TracePainter:
 
     def clear_all(self, bv: BinaryView):
         """clear all current highlights"""
-        for (func, addr), _ in self.highlighted.items():
-            try:
-                func.clear_auto_instr_highlight(addr)
-            except (AttributeError, RuntimeError):
-                # function may have been invalidated
-                pass
-        self.highlighted.clear()
+        from .log import log_info, log_warn
+
+        log_info(bv, f"clearing {len(self.highlighted_addresses)} highlights")
+        cleared = 0
+        failed = []
+
+        for addr in self.highlighted_addresses:
+            # get fresh function objects for this address
+            funcs = bv.get_functions_containing(addr)
+            for func in funcs:
+                try:
+                    func.set_auto_instr_highlight(
+                        addr, HighlightStandardColor.NoHighlightColor
+                    )
+                    cleared += 1
+                except Exception as e:
+                    failed.append((addr, str(e)))
+
+        if failed:
+            log_warn(bv, f"failed to clear {len(failed)} highlights: {failed[:3]}")
+
+        log_info(
+            bv,
+            f"successfully cleared {cleared} highlights from {len(self.highlighted_addresses)} addresses",
+        )
+        self.highlighted_addresses.clear()
 
     def _highlight_address(self, bv: BinaryView, address: int, color: HighlightColor):
         """highlight address in all functions containing it"""
-        from .log import log_info
+        from .log import log_info, log_warn
 
         funcs = bv.get_functions_containing(address)
         log_info(bv, f"highlighting address {hex(address)} in {len(funcs)} functions")
 
+        highlighted_in_any = False
         for func in funcs:
             try:
                 func.set_auto_instr_highlight(address, color)
-                self.highlighted[(func, address)] = color
+                highlighted_in_any = True
                 log_info(bv, f"highlighted {hex(address)} in function {func.name}")
-            except (AttributeError, RuntimeError) as e:
-                # function may be invalid or address not in function
-                log_info(bv, f"failed to highlight {hex(address)}: {e}")
-                pass
+            except Exception as e:
+                log_warn(bv, f"failed to highlight {hex(address)} in {func.name}: {e}")
+
+        if highlighted_in_any:
+            self.highlighted_addresses.add(address)
 
     def _get_past_entries(self, cursor: TraceCursor, count: int) -> List[TraceEntry]:
         """get entries before current position"""

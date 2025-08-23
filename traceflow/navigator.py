@@ -1,9 +1,16 @@
 # navigation logic for trace stepping operations
 
-from typing import Optional
+from typing import Optional, Set
 from binaryninja.enums import LowLevelILOperation
-from .context import TraceContext
+from .context import TraceContext, ExecutionState
 from .log import log_info, log_error, log_warn
+
+try:
+    from binaryninja.debugger import DebuggerController
+
+    DEBUGGER_AVAILABLE = True
+except ImportError:
+    DEBUGGER_AVAILABLE = False
 
 
 class TraceNavigator:
@@ -11,6 +18,35 @@ class TraceNavigator:
 
     def __init__(self, context: TraceContext):
         self.context = context
+        self._breakpoint_addresses: Set[int] = set()
+        self._dbg_controller: Optional[DebuggerController] = None
+
+    def _init_debugger(self):
+        """initialize debugger controller if not already done"""
+        if self._dbg_controller is None and DEBUGGER_AVAILABLE:
+            try:
+                self._dbg_controller = DebuggerController(self.context.bv)
+            except Exception:
+                # debugger may not be available or accessible
+                pass
+
+    def _refresh_breakpoints(self):
+        """refresh breakpoint set from debugger controller"""
+        self._init_debugger()
+        if self._dbg_controller:
+            try:
+                self._breakpoint_addresses = {
+                    bp.address for bp in self._dbg_controller.breakpoints
+                }
+            except Exception:
+                # breakpoints may not be accessible
+                self._breakpoint_addresses = set()
+        else:
+            self._breakpoint_addresses = set()
+
+    def _check_breakpoint(self, address: int) -> bool:
+        """check if address has a breakpoint"""
+        return address in self._breakpoint_addresses
 
     def run(self) -> bool:
         """go to beginning of trace"""
@@ -18,16 +54,16 @@ class TraceNavigator:
             log_warn(self.context.bv, "cannot run: no trace loaded")
             return False
 
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
 
         # go to start
         success = self.context.cursor.go_to_start()
         if success:
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             self.update_ui()
             log_info(self.context.bv, "moved to beginning of trace")
         else:
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             log_error(self.context.bv, "failed to move to beginning of trace")
 
         return success
@@ -46,38 +82,58 @@ class TraceNavigator:
 
     def play_forward(self) -> bool:
         """fast forward to end without highlighting until stopped"""
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
+
+        # refresh breakpoints before tight loop
+        self._refresh_breakpoints()
 
         # if not started, go to beginning first
         if not self.context.cursor.is_started():
             if not self.context.cursor.go_to_start():
-                self.context.execution_state = "stopped"
+                self.context.set_execution_state(ExecutionState.STOPPED)
                 return False
 
         # fast execution without painting
         while not self.context.cursor.is_at_end():
             if not self.context.cursor.step_forward():
                 break
-            # future: check breakpoints here
+
+            # check for breakpoint at current address
+            current_addr = self.context.cursor.get_current_address()
+            if current_addr and self._check_breakpoint(current_addr):
+                self.context.set_execution_state(ExecutionState.STOPPED)
+                self.update_ui()
+                log_info(self.context.bv, f"stopped at breakpoint: {hex(current_addr)}")
+                return True
 
         # stop and paint final position
-        self.context.execution_state = "stopped"
+        self.context.set_execution_state(ExecutionState.STOPPED)
         self.update_ui()
         log_info(self.context.bv, "played forward to end of trace")
         return True
 
     def play_backward(self) -> bool:
         """rewind to start without highlighting until stopped"""
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
+
+        # refresh breakpoints before tight loop
+        self._refresh_breakpoints()
 
         # fast execution without painting
         while not self.context.cursor.is_at_start():
             if not self.context.cursor.step_backward():
                 break
-            # future: check breakpoints here
+
+            # check for breakpoint at current address
+            current_addr = self.context.cursor.get_current_address()
+            if current_addr and self._check_breakpoint(current_addr):
+                self.context.set_execution_state(ExecutionState.STOPPED)
+                self.update_ui()
+                log_info(self.context.bv, f"stopped at breakpoint: {hex(current_addr)}")
+                return True
 
         # stop and paint final position
-        self.context.execution_state = "stopped"
+        self.context.set_execution_state(ExecutionState.STOPPED)
         self.update_ui()
         log_info(self.context.bv, "played backward to start of trace")
         return True
@@ -88,7 +144,7 @@ class TraceNavigator:
             log_warn(self.context.bv, "cannot step forward: at end of trace")
             return False
 
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
 
         # if not started, go to beginning first
         if not self.context.cursor.is_started():
@@ -97,10 +153,10 @@ class TraceNavigator:
             success = self.context.cursor.step_forward()
 
         if success:
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             self.update_ui()
         else:
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             log_error(self.context.bv, "failed to step forward")
 
         return success
@@ -111,14 +167,14 @@ class TraceNavigator:
             log_warn(self.context.bv, "cannot step backward: at beginning of trace")
             return False
 
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
 
         success = self.context.cursor.step_backward()
         if success:
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             self.update_ui()
         else:
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             log_error(self.context.bv, "failed to step backward")
 
         return success
@@ -166,16 +222,20 @@ class TraceNavigator:
             return self.step_forward()
 
         # it's a call - step forward once to enter the call
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
+
+        # refresh breakpoints before tight loop
+        self._refresh_breakpoints()
+
         if not self.context.cursor.step_forward():
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             return False
 
         # get the function we just entered
         called_func = self._get_current_function()
         if not called_func:
             # couldn't determine function, just stop here
-            self.context.execution_state = "stopped"
+            self.context.set_execution_state(ExecutionState.STOPPED)
             self.update_ui()
             log_info(self.context.bv, "stepped over call (function not identified)")
             return True
@@ -185,12 +245,23 @@ class TraceNavigator:
             if not self.context.cursor.step_forward():
                 break
 
+            # check for breakpoint at current address
+            current_addr = self.context.cursor.get_current_address()
+            if current_addr and self._check_breakpoint(current_addr):
+                self.context.set_execution_state(ExecutionState.STOPPED)
+                self.update_ui()
+                log_info(
+                    self.context.bv,
+                    f"stopped at breakpoint during step over: {hex(current_addr)}",
+                )
+                return True
+
             current_func = self._get_current_function()
             if current_func != called_func:
                 # we've exited the called function
                 break
 
-        self.context.execution_state = "stopped"
+        self.context.set_execution_state(ExecutionState.STOPPED)
         self.update_ui()
         log_info(
             self.context.bv,
@@ -211,19 +282,33 @@ class TraceNavigator:
             log_warn(self.context.bv, "cannot step out: not in a function")
             return self.step_forward()
 
-        self.context.execution_state = "running"
+        self.context.set_execution_state(ExecutionState.RUNNING)
+
+        # refresh breakpoints before tight loop
+        self._refresh_breakpoints()
 
         # continue until we exit this function
         while not self.context.cursor.is_at_end():
             if not self.context.cursor.step_forward():
                 break
 
+            # check for breakpoint at current address
+            current_addr = self.context.cursor.get_current_address()
+            if current_addr and self._check_breakpoint(current_addr):
+                self.context.set_execution_state(ExecutionState.STOPPED)
+                self.update_ui()
+                log_info(
+                    self.context.bv,
+                    f"stopped at breakpoint during step out: {hex(current_addr)}",
+                )
+                return True
+
             new_func = self._get_current_function()
             if new_func != current_func:
                 # we've exited the function
                 break
 
-        self.context.execution_state = "stopped"
+        self.context.set_execution_state(ExecutionState.STOPPED)
         self.update_ui()
         log_info(self.context.bv, f"stepped out of {current_func.name}")
         return True
@@ -233,10 +318,9 @@ class TraceNavigator:
         return self.step_backward()
 
     def update_ui(self):
-        """update highlights and navigate binary view"""
-        # update instruction highlight for current position
-        self.context.update_highlight()
-        # sync binary view to current position
+        """navigate binary view to current position"""
+        # painting is now handled by state transitions in set_execution_state()
+        # only navigation is needed here
         self.context.navigate_to_current()
 
     def can_step_forward(self) -> bool:
