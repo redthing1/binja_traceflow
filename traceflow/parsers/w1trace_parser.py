@@ -1,13 +1,16 @@
 # w1trace jsonl format parser
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from binaryninja import BinaryView
 
 from .base import BaseParser
 from ..tracedb import TraceDB, TraceEntry
+from ..module_info import ModuleInfo
+from ..address_translator import AddressTranslator
+from ..log import log_info, log_warn, log_debug
 
 
 class W1TraceParser(BaseParser):
@@ -38,6 +41,10 @@ class W1TraceParser(BaseParser):
     def parse(self, bv: "BinaryView", filepath: str) -> TraceDB:
         """parse w1trace jsonl file and return trace database"""
         trace_db = TraceDB()
+        modules: List[ModuleInfo] = []
+        translator: Optional[AddressTranslator] = None
+
+        log_debug(bv, f"parsing w1trace file: {filepath}")
 
         with open(filepath, "r") as f:
             for line_num, line in enumerate(f, 1):
@@ -50,34 +57,76 @@ class W1TraceParser(BaseParser):
                     record_type = data.get("type")
 
                     if record_type == "metadata":
-                        # store metadata for potential future use
-                        # could extract module info, version, etc.
+                        # parse module information from metadata
+                        modules_data = data.get("modules", [])
+                        modules = [ModuleInfo.from_dict(m) for m in modules_data]
+
+                        log_info(bv, f"parsed {len(modules)} modules from metadata")
+                        for module in modules:
+                            log_debug(
+                                bv,
+                                f"module: {module.name} at 0x{module.runtime_base:x} size={module.size}",
+                            )
+
+                        # create address translator
+                        translator = AddressTranslator(bv, modules)
+                        stats = translator.get_stats()
+                        log_info(bv, f"address translator: {stats}")
+
                         continue
 
                     elif record_type == "insn":
                         # instruction execution record
-                        address = data.get("address")
+                        runtime_address = data.get("address")
                         step = data.get("step")
 
-                        if address is None or step is None:
+                        if runtime_address is None or step is None:
                             continue
 
-                        # add trace entry
-                        trace_db.add_entry(
-                            address=address,
-                            thread_id=0,  # w1trace doesn't specify thread in this format
-                            metadata={"step": step},
-                        )
+                        # skip if no translator (no metadata yet)
+                        if translator is None:
+                            log_warn(
+                                bv,
+                                f"skipping instruction at line {line_num}: no metadata/translator available",
+                            )
+                            continue
+
+                        # translate runtime address to binaryview address
+                        bv_address = translator.translate(runtime_address)
+
+                        if bv_address is not None:
+                            # add trace entry with translated address
+                            trace_db.add_entry(
+                                address=bv_address,
+                                thread_id=0,  # w1trace doesn't specify thread in this format
+                                metadata={
+                                    "step": step,
+                                    "runtime_address": runtime_address,  # keep original for debugging
+                                },
+                            )
+                        # else: address not in target module, skip silently
 
                 except json.JSONDecodeError as e:
-                    from ..log import log_warn
-
                     log_warn(bv, f"skipping malformed json at line {line_num}: {e}")
                     continue
                 except Exception as e:
-                    from ..log import log_warn
-
                     log_warn(bv, f"error processing line {line_num}: {e}")
                     continue
+
+        # log final statistics
+        total_entries = trace_db.get_total_entries()
+        unique_addrs = trace_db.get_unique_address_count()
+
+        if translator:
+            stats = translator.get_stats()
+            log_info(
+                bv,
+                f"parsing complete: {total_entries} entries, {unique_addrs} unique addresses. translator: {stats['can_translate']}",
+            )
+        else:
+            log_warn(
+                bv,
+                f"parsing complete but no translator available: {total_entries} entries",
+            )
 
         return trace_db

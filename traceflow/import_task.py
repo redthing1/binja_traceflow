@@ -55,8 +55,22 @@ class TraceImportTask(BackgroundTaskThread):
                 ctx.clear()  # rollback on cancel
                 return
 
-            # phase 3: final setup
+            # phase 3: final setup and initial navigation
             self.progress = f"Trace imported: {total_entries:,} entries loaded"
+
+            # go to first instruction and set up initial state
+            ctx.cursor.go_to_start()
+            ctx.execution_state = "stopped"
+
+            # debug logging
+            current_addr = ctx.cursor.get_current_address()
+            log_info(
+                self.bv,
+                f"initial position set to address: {hex(current_addr) if current_addr else 'None'}",
+            )
+
+            ctx.update_highlight()
+            ctx.navigate_to_current()
 
             # log success message with statistics
             msg = f"loaded trace: {total_entries:,} entries with {unique_addresses:,} unique addresses"
@@ -103,12 +117,15 @@ class TraceImportTask(BackgroundTaskThread):
                 from PySide6.QtCore import QMetaObject, Qt
 
                 log_info(self.bv, "notifying ui to refresh after trace import")
-                QMetaObject.invokeMethod(widget, "on_trace_imported", Qt.QueuedConnection)
+                QMetaObject.invokeMethod(
+                    widget, "on_trace_imported", Qt.QueuedConnection
+                )
             else:
                 log_info(self.bv, "warning: no widget found in registry for ui refresh")
         except Exception as e:
             # ui refresh failure is not critical - log but don't crash
             from .log import log_warn
+
             log_warn(self.bv, f"failed to refresh ui after import: {e}")
 
     def _show_error_dialog(self):

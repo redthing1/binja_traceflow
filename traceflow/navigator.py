@@ -18,7 +18,7 @@ class TraceNavigator:
 
         self.context.execution_state = "running"
 
-        # use cursor method to go to start
+        # go to start
         success = self.context.cursor.go_to_start()
         if success:
             self.context.execution_state = "stopped"
@@ -31,24 +31,54 @@ class TraceNavigator:
         return success
 
     def play(self) -> bool:
-        """go to end of trace"""
+        """play forward to end OR backward to start based on current position"""
         if self.context.tracedb.is_empty():
             log_warn(self.context.bv, "cannot play: no trace loaded")
             return False
 
+        # determine direction based on current position
+        if self.context.cursor.is_at_end():
+            return self.play_backward()  # at end, play backward
+        else:
+            return self.play_forward()  # otherwise play forward
+
+    def play_forward(self) -> bool:
+        """fast forward to end without highlighting until stopped"""
         self.context.execution_state = "running"
 
-        # use cursor method to go to end
-        success = self.context.cursor.go_to_end()
-        if success:
-            self.context.execution_state = "at_end"
-            self.update_ui()
-            log_info(self.context.bv, "moved to end of trace")
-        else:
-            self.context.execution_state = "stopped"
-            log_error(self.context.bv, "failed to move to end of trace")
+        # if not started, go to beginning first
+        if not self.context.cursor.is_started():
+            if not self.context.cursor.go_to_start():
+                self.context.execution_state = "stopped"
+                return False
 
-        return success
+        # fast execution without painting
+        while not self.context.cursor.is_at_end():
+            if not self.context.cursor.step_forward():
+                break
+            # future: check breakpoints here
+
+        # stop and paint final position
+        self.context.execution_state = "stopped"
+        self.update_ui()
+        log_info(self.context.bv, "played forward to end of trace")
+        return True
+
+    def play_backward(self) -> bool:
+        """rewind to start without highlighting until stopped"""
+        self.context.execution_state = "running"
+
+        # fast execution without painting
+        while not self.context.cursor.is_at_start():
+            if not self.context.cursor.step_backward():
+                break
+            # future: check breakpoints here
+
+        # stop and paint final position
+        self.context.execution_state = "stopped"
+        self.update_ui()
+        log_info(self.context.bv, "played backward to start of trace")
+        return True
 
     def step_forward(self) -> bool:
         """move to next instruction"""
@@ -62,15 +92,10 @@ class TraceNavigator:
         if not self.context.cursor.is_started():
             success = self.context.cursor.go_to_start()
         else:
-            # use cursor method to step forward
             success = self.context.cursor.step_forward()
 
         if success:
-            # check if we reached the end
-            if self.is_at_end():
-                self.context.execution_state = "at_end"
-            else:
-                self.context.execution_state = "stopped"
+            self.context.execution_state = "stopped"
             self.update_ui()
         else:
             self.context.execution_state = "stopped"
@@ -86,7 +111,6 @@ class TraceNavigator:
 
         self.context.execution_state = "running"
 
-        # use cursor method to step backward
         success = self.context.cursor.step_backward()
         if success:
             self.context.execution_state = "stopped"
