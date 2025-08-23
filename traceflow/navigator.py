@@ -1,5 +1,7 @@
 # navigation logic for trace stepping operations
 
+from typing import Optional
+from binaryninja.enums import LowLevelILOperation
 from .context import TraceContext
 from .log import log_info, log_error, log_warn
 
@@ -121,17 +123,110 @@ class TraceNavigator:
 
         return success
 
+    def _is_call_instruction(self, address: int) -> bool:
+        """check if instruction at address is a call"""
+        funcs = self.context.bv.get_functions_containing(address)
+
+        for func in funcs:
+            try:
+                llil = func.get_llil_at(address)
+                if llil and llil.operation == LowLevelILOperation.LLIL_CALL:
+                    return True
+            except (AttributeError, RuntimeError):
+                # function may not have llil or address not valid
+                continue
+        return False
+
+    def _get_current_function(self):
+        """get function containing current address"""
+        current_addr = self.context.cursor.get_current_address()
+        if not current_addr:
+            return None
+
+        funcs = self.context.bv.get_functions_containing(current_addr)
+        return funcs[0] if funcs else None
+
     def step_in(self) -> bool:
-        """follow call into function (placeholder: just step_forward for now)"""
+        """step in (same as step forward for trace replay)"""
         return self.step_forward()
 
     def step_over(self) -> bool:
-        """skip over call (placeholder: just step_forward for now)"""
-        return self.step_forward()
+        """step over call - if at call, continue until after it returns"""
+        if not self.can_step_forward():
+            log_warn(self.context.bv, "cannot step over: at end of trace")
+            return False
+
+        current_addr = self.context.cursor.get_current_address()
+        if not current_addr:
+            return self.step_forward()
+
+        # check if current instruction is a call
+        if not self._is_call_instruction(current_addr):
+            # not a call, just step forward
+            return self.step_forward()
+
+        # it's a call - step forward once to enter the call
+        self.context.execution_state = "running"
+        if not self.context.cursor.step_forward():
+            self.context.execution_state = "stopped"
+            return False
+
+        # get the function we just entered
+        called_func = self._get_current_function()
+        if not called_func:
+            # couldn't determine function, just stop here
+            self.context.execution_state = "stopped"
+            self.update_ui()
+            log_info(self.context.bv, "stepped over call (function not identified)")
+            return True
+
+        # continue until we exit this function
+        while not self.context.cursor.is_at_end():
+            if not self.context.cursor.step_forward():
+                break
+
+            current_func = self._get_current_function()
+            if current_func != called_func:
+                # we've exited the called function
+                break
+
+        self.context.execution_state = "stopped"
+        self.update_ui()
+        log_info(
+            self.context.bv,
+            f"stepped over call to {called_func.name if called_func else 'unknown'}",
+        )
+        return True
 
     def step_out(self) -> bool:
-        """continue until function return (placeholder: just step_forward for now)"""
-        return self.step_forward()
+        """continue until we exit current function"""
+        if not self.can_step_forward():
+            log_warn(self.context.bv, "cannot step out: at end of trace")
+            return False
+
+        # get current function
+        current_func = self._get_current_function()
+        if not current_func:
+            # no function context, just step forward
+            log_warn(self.context.bv, "cannot step out: not in a function")
+            return self.step_forward()
+
+        self.context.execution_state = "running"
+
+        # continue until we exit this function
+        while not self.context.cursor.is_at_end():
+            if not self.context.cursor.step_forward():
+                break
+
+            new_func = self._get_current_function()
+            if new_func != current_func:
+                # we've exited the function
+                break
+
+        self.context.execution_state = "stopped"
+        self.update_ui()
+        log_info(self.context.bv, f"stepped out of {current_func.name}")
+        return True
 
     def step_back(self) -> bool:
         """reverse of step_in (placeholder: just step_backward for now)"""

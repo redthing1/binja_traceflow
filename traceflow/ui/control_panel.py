@@ -51,9 +51,64 @@ class ControlPanel(QWidget):
         self.btn_play_forward.setToolTip("Play forward to end")
         action_play_forward = QAction("Play Forward", self)
         action_play_forward.triggered.connect(self.on_play_forward)
-        action_play_forward.setIcon(self._create_icon("arrow-right-from-line", "|>>"))
+        action_play_forward.setIcon(self._create_icon("play", "|>>"))
         self.btn_play_forward.setDefaultAction(action_play_forward)
         self.toolbar.addWidget(self.btn_play_forward)
+
+        # pause button
+        self.btn_pause = QToolButton()
+        self.btn_pause.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_pause.setMaximumHeight(max_height)
+        self.btn_pause.setToolTip("Pause execution")
+        action_pause = QAction("Pause", self)
+        action_pause.triggered.connect(self.on_pause)
+        action_pause.setIcon(self._create_icon("pause", "||"))
+        self.btn_pause.setDefaultAction(action_pause)
+        self.toolbar.addWidget(self.btn_pause)
+
+        # step in button (same as step forward)
+        self.btn_step_in = QToolButton()
+        self.btn_step_in.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_step_in.setMaximumHeight(max_height)
+        self.btn_step_in.setToolTip("Step in")
+        action_step_in = QAction("Step In", self)
+        action_step_in.triggered.connect(self.on_step_in)
+        action_step_in.setIcon(self._create_icon("arrow-down-to-dot", "↓"))
+        self.btn_step_in.setDefaultAction(action_step_in)
+        self.toolbar.addWidget(self.btn_step_in)
+
+        # step over button
+        self.btn_step_over = QToolButton()
+        self.btn_step_over.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_step_over.setMaximumHeight(max_height)
+        self.btn_step_over.setToolTip("Step over call")
+        action_step_over = QAction("Step Over", self)
+        action_step_over.triggered.connect(self.on_step_over)
+        action_step_over.setIcon(self._create_icon("redo-dot", "→"))
+        self.btn_step_over.setDefaultAction(action_step_over)
+        self.toolbar.addWidget(self.btn_step_over)
+
+        # step out button
+        self.btn_step_out = QToolButton()
+        self.btn_step_out.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_step_out.setMaximumHeight(max_height)
+        self.btn_step_out.setToolTip("Step out of function")
+        action_step_out = QAction("Step Out", self)
+        action_step_out.triggered.connect(self.on_step_out)
+        action_step_out.setIcon(self._create_icon("arrow-up-from-dot", "↑"))
+        self.btn_step_out.setDefaultAction(action_step_out)
+        self.toolbar.addWidget(self.btn_step_out)
+
+        # step back button
+        self.btn_step_back = QToolButton()
+        self.btn_step_back.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.btn_step_back.setMaximumHeight(max_height)
+        self.btn_step_back.setToolTip("Step back")
+        action_step_back = QAction("Step Back", self)
+        action_step_back.triggered.connect(self.on_step_back)
+        action_step_back.setIcon(self._create_icon("undo-dot", "←"))
+        self.btn_step_back.setDefaultAction(action_step_back)
+        self.toolbar.addWidget(self.btn_step_back)
 
         # play backward button
         self.btn_play_backward = QToolButton()
@@ -62,65 +117,9 @@ class ControlPanel(QWidget):
         self.btn_play_backward.setToolTip("Play backward to start")
         action_play_backward = QAction("Play Backward", self)
         action_play_backward.triggered.connect(self.on_play_backward)
-        action_play_backward.setIcon(self._create_icon("arrow-left-from-line", "<<|"))
+        action_play_backward.setIcon(self._create_icon("play-back", "<<|"))
         self.btn_play_backward.setDefaultAction(action_play_backward)
         self.toolbar.addWidget(self.btn_play_backward)
-
-        # step forward button
-        self.btn_step_forward = QToolButton()
-        self.btn_step_forward.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_step_forward.setMaximumHeight(max_height)
-        self.btn_step_forward.setToolTip("Step forward")
-        action_step_forward = QAction("Step Forward", self)
-        action_step_forward.triggered.connect(self.on_step_forward)
-        action_step_forward.setIcon(self._create_icon("step-forward", ">"))
-        self.btn_step_forward.setDefaultAction(action_step_forward)
-        self.toolbar.addWidget(self.btn_step_forward)
-
-        # step backward button
-        self.btn_step_backward = QToolButton()
-        self.btn_step_backward.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_step_backward.setMaximumHeight(max_height)
-        self.btn_step_backward.setToolTip("Step backward")
-        action_step_backward = QAction("Step Backward", self)
-        action_step_backward.triggered.connect(self.on_step_backward)
-        action_step_backward.setIcon(self._create_icon("step-back", "<"))
-        self.btn_step_backward.setDefaultAction(action_step_backward)
-        self.toolbar.addWidget(self.btn_step_backward)
-
-        # step in button (placeholder)
-        self.btn_step_in = QToolButton()
-        self.btn_step_in.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_step_in.setMaximumHeight(max_height)
-        self.btn_step_in.setToolTip("Step in (placeholder)")
-        action_step_in = QAction("Step In", self)
-        action_step_in.triggered.connect(self.on_step_in)
-        action_step_in.setIcon(self._create_icon("arrow-down-to-line", "↓"))
-        self.btn_step_in.setDefaultAction(action_step_in)
-        self.toolbar.addWidget(self.btn_step_in)
-
-        # step over button (placeholder)
-        self.btn_step_over = QToolButton()
-        self.btn_step_over.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_step_over.setMaximumHeight(max_height)
-        self.btn_step_over.setToolTip("Step over (placeholder)")
-        action_step_over = QAction("Step Over", self)
-        action_step_over.triggered.connect(self.on_step_over)
-        action_step_over.setIcon(self._create_icon("redo-dot", "→"))
-        self.btn_step_over.setDefaultAction(action_step_over)
-        self.toolbar.addWidget(self.btn_step_over)
-
-        # step out button (placeholder)
-        self.btn_step_out = QToolButton()
-        self.btn_step_out.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.btn_step_out.setMaximumHeight(max_height)
-        self.btn_step_out.setToolTip("Step out (placeholder)")
-        action_step_out = QAction("Step Out", self)
-        action_step_out.triggered.connect(self.on_step_out)
-        action_step_out.setIcon(self._create_icon("arrow-up-from-dot", "↑"))
-        self.btn_step_out.setDefaultAction(action_step_out)
-        self.toolbar.addWidget(self.btn_step_out)
-
 
         # separator
         self.toolbar.addSeparator()
@@ -186,12 +185,12 @@ class ControlPanel(QWidget):
         """enable/disable control buttons based on trace state"""
         self.btn_run.setEnabled(enabled)
         self.btn_play_forward.setEnabled(enabled)
-        self.btn_play_backward.setEnabled(enabled)
-        self.btn_step_forward.setEnabled(enabled)
-        self.btn_step_backward.setEnabled(enabled)
-        self.btn_step_in.setEnabled(enabled)  # keep placeholders enabled
+        self.btn_pause.setEnabled(enabled)
+        self.btn_step_in.setEnabled(enabled)
         self.btn_step_over.setEnabled(enabled)
         self.btn_step_out.setEnabled(enabled)
+        self.btn_step_back.setEnabled(enabled)
+        self.btn_play_backward.setEnabled(enabled)
         self.btn_clear.setEnabled(enabled)
 
     def update_controls(self, bv):
@@ -264,6 +263,19 @@ class ControlPanel(QWidget):
 
             log_warn(None, "cannot play forward: no binary file is currently open")
 
+    def on_pause(self):
+        """pause execution (currently just a placeholder)"""
+        bv = self._get_binary_view()
+        if bv:
+            # for now, pause is just informational since we don't have async execution
+            from ..log import log_info
+
+            log_info(bv, "pause requested (execution is already synchronous)")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot pause: no binary file is currently open")
+
     def on_play_backward(self):
         """play backward to start"""
         bv = self._get_binary_view()
@@ -319,50 +331,76 @@ class ControlPanel(QWidget):
             log_warn(None, "cannot step backward: no binary file is currently open")
 
     def on_step_in(self):
-        """step in functionality (not implemented)"""
+        """step in (same as step forward)"""
         bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
             success = ctx.navigator.step_in()
-            if not success:
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
                 from ..log import log_warn
 
-                log_warn(bv, "step in not implemented yet")
+                log_warn(bv, "cannot step in: at end of trace")
         else:
             from ..log import log_warn
 
             log_warn(None, "cannot step in: no binary file is currently open")
 
     def on_step_over(self):
-        """step over functionality (not implemented)"""
+        """step over call"""
         bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
             success = ctx.navigator.step_over()
-            if not success:
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
                 from ..log import log_warn
 
-                log_warn(bv, "step over not implemented yet")
+                log_warn(bv, "cannot step over: at end of trace or error occurred")
         else:
             from ..log import log_warn
 
             log_warn(None, "cannot step over: no binary file is currently open")
 
     def on_step_out(self):
-        """step out functionality (not implemented)"""
+        """step out of function"""
         bv = self._get_binary_view()
         if bv:
             ctx = get_context(bv)
             success = ctx.navigator.step_out()
-            if not success:
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
                 from ..log import log_warn
 
-                log_warn(bv, "step out not implemented yet")
+                log_warn(bv, "cannot step out: not in function or at end of trace")
         else:
             from ..log import log_warn
 
             log_warn(None, "cannot step out: no binary file is currently open")
 
+    def on_step_back(self):
+        """step back (same as step backward)"""
+        bv = self._get_binary_view()
+        if bv:
+            ctx = get_context(bv)
+            success = ctx.navigator.step_back()
+            if success:
+                self.update_controls(bv)
+                self.trace_changed.emit()
+            else:
+                from ..log import log_warn
+
+                log_warn(bv, "cannot step back: at start of trace")
+        else:
+            from ..log import log_warn
+
+            log_warn(None, "cannot step back: no binary file is currently open")
 
     def on_load_trace(self):
         """load trace file via file dialog"""
