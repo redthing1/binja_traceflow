@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QToolButton,
     QLabel,
     QHBoxLayout,
+    QSizePolicy,
 )
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtCore import Qt, Signal
@@ -149,6 +150,7 @@ class ControlPanel(QWidget):
         # position display
         self.position_label = QLabel("No trace loaded - use Traceflow → Import Trace")
         self.position_label.setAlignment(Qt.AlignCenter)
+        self.position_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.position_label.setStyleSheet(
             "padding: 4px; border: 1px solid gray; color: gray;"
         )
@@ -157,6 +159,7 @@ class ControlPanel(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.toolbar)
         layout.addWidget(self.position_label)
+        layout.addStretch(1)
         layout.setSpacing(4)
         layout.setContentsMargins(2, 2, 2, 2)
         self.setLayout(layout)
